@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPX Studio - 萬用座標轉換器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #f8fafc; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    </style>
+</head>
+<body class="min-h-screen pb-12">
+
+    <div class="gradient-bg text-white py-8 px-4 shadow-lg mb-8">
+        <div class="max-w-4xl mx-auto flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold flex items-center gap-3">
+                    <i class="fas fa-map-marked-alt"></i> GPX Studio
+                </h1>
+                <p class="mt-2 opacity-80 text-sm">快速將 Excel 座標轉換為標準或飛妹專用 GPX 格式</p>
+            </div>
+            <div class="hidden md:block">
+                <i class="fas fa-route text-5xl opacity-30"></i>
+            </div>
+        </div>
+    </div>
+
+    <main class="max-w-4xl mx-auto px-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <div class="md:col-span-2 space-y-4">
+                <div class="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+                    <div class="flex items-center justify-between mb-4">
+                        <label class="font-semibold text-gray-700 flex items-center gap-2">
+                            <i class="fas fa-paste text-indigo-500"></i> 貼上座標數據
+                        </label>
+                        <span class="text-xs text-gray-400">格式：緯度 [空格] 經度</span>
+                    </div>
+                    <textarea id="inputData" 
+                        class="w-full h-80 p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all font-mono text-sm bg-gray-50"
+                        placeholder="例如：&#10;-34.723327 -56.215053&#10;-34.724446 -56.217100"></textarea>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+                    <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                        <i class="fas fa-cog text-indigo-500"></i> 設定選項
+                    </h3>
+                    
+                    <div class="space-y-4">
+                        <label class="flex items-center cursor-pointer group">
+                            <div class="relative">
+                                <input type="checkbox" id="reverseOrder" class="sr-only">
+                                <div class="block bg-gray-200 w-10 h-6 rounded-full transition-colors peer-checked:bg-indigo-600"></div>
+                                <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform"></div>
+                            </div>
+                            <span class="ml-3 text-gray-600 group-hover:text-indigo-600 transition-colors">🔄 順序反轉 (倒序)</span>
+                        </label>
+
+                        <hr class="border-gray-100">
+
+                        <div class="space-y-3">
+                            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">輸出格式</p>
+                            
+                            <label class="flex items-center p-3 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 transition-all has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
+                                <input type="radio" name="format" value="trk" checked class="text-indigo-600 focus:ring-indigo-500">
+                                <div class="ml-3">
+                                    <span class="block text-sm font-bold text-gray-700">🛰️ 一般軌跡版</span>
+                                    <span class="block text-xs text-gray-500">標準 trkpt 格式</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center p-3 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 transition-all has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
+                                <input type="radio" name="format" value="wpt" class="text-indigo-600 focus:ring-indigo-500">
+                                <div class="ml-3">
+                                    <span class="block text-sm font-bold text-gray-700">🚩 飛妹專用版</span>
+                                    <span class="block text-xs text-gray-500">獨立 wpt 航點格式</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button onclick="generateGPX()" 
+                        class="w-full mt-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2">
+                        <i class="fas fa-file-download"></i> 生成並下載
+                    </button>
+                </div>
+
+                <div class="bg-indigo-50 rounded-xl p-4 text-xs text-indigo-700">
+                    <p><i class="fas fa-info-circle"></i> <b>提示：</b> 若要部屬至 GitHub，請將此檔命名為 index.html 並推送到你的 Repository 即可開啟 GitHub Pages。</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function generateGPX() {
+            const rawData = document.getElementById('inputData').value.trim();
+            if (!rawData) {
+                alert("⚠️ 請先輸入座標數據！");
+                return;
+            }
+
+            let lines = rawData.split('\n').map(line => line.trim().split(/\s+/));
+            if (document.getElementById('reverseOrder').checked) lines.reverse();
+
+            const format = document.querySelector('input[name="format"]:checked').value;
+            const now = new Date().toISOString();
+            let gpxContent = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+            
+            if (format === 'wpt') {
+                gpxContent += `<gpx xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/1" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" version="1.1" creator="ARMate">\n`;
+                lines.forEach((p, i) => {
+                    if (p.length >= 2) {
+                        gpxContent += `\t<wpt lat="${p[0]}" lon="${p[1]}">\n\t\t<time>${now}</time>\n\t\t<name>PT-${(i+1).toString().padStart(2, '0')}</name>\n\t</wpt>\n`;
+                    }
+                });
+            } else {
+                gpxContent += `<gpx version="1.1" creator="Gemini_GPX_Tool" xmlns="http://www.topografix.com/GPX/1/1">\n\t<trk>\n\t\t<name>Track_Export</name>\n\t\t<trkseg>\n`;
+                lines.forEach(p => {
+                    if (p.length >= 2) gpxContent += `\t\t\t<trkpt lat="${p[0]}" lon="${p[1]}"></trkpt>\n`;
+                });
+                gpxContent += `\t\t</trkseg>\n\t</trk>\n`;
+            }
+            gpxContent += `</gpx>`;
+
+            const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `GPX_${format.toUpperCase()}_${new Date().getTime()}.gpx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+    
+    <style>
+        /* 切換開關動畫 */
+        #reverseOrder:checked ~ .dot { transform: translateX(100%); }
+        #reverseOrder:checked ~ div { background-color: #4f46e5; }
+    </style>
+</body>
+</html>
