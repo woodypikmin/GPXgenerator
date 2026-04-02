@@ -19,7 +19,7 @@
                 <h1 class="text-3xl font-bold flex items-center gap-3">
                     <i class="fas fa-map-marked-alt"></i> GPX Studio
                 </h1>
-                <p class="mt-2 opacity-80 text-sm">快速將 Excel 座標轉換為標準或飛妹專用 GPX 格式</p>
+                <p class="mt-2 opacity-80 text-sm">快速將座標轉換為標準或飛妹專用 GPX 格式</p>
             </div>
             <div class="hidden md:block">
                 <i class="fas fa-route text-5xl opacity-30"></i>
@@ -36,11 +36,11 @@
                         <label class="font-semibold text-gray-700 flex items-center gap-2">
                             <i class="fas fa-paste text-indigo-500"></i> 貼上座標數據
                         </label>
-                        <span class="text-xs text-gray-400">格式：緯度 [空格] 經度</span>
+                        <span class="text-xs text-gray-400">支援空格、逗號或 Tab 分隔</span>
                     </div>
                     <textarea id="inputData" 
                         class="w-full h-80 p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all font-mono text-sm bg-gray-50"
-                        placeholder="例如：&#10;-34.723327 -56.215053&#10;-34.724446 -56.217100"></textarea>
+                        placeholder="例如：&#10;25.0336, 121.5648&#10;25.0400;121.5600&#10;25.0500 121.5700"></textarea>
                 </div>
             </div>
 
@@ -88,10 +88,6 @@
                         <i class="fas fa-file-download"></i> 生成並下載
                     </button>
                 </div>
-
-                <div class="bg-indigo-50 rounded-xl p-4 text-xs text-indigo-700">
-                    <p><i class="fas fa-info-circle"></i> <b>提示：</b> 若要部屬至 GitHub，請將此檔命名為 index.html 並推送到你的 Repository 即可開啟 GitHub Pages。</p>
-                </div>
             </div>
         </div>
     </main>
@@ -104,7 +100,16 @@
                 return;
             }
 
-            let lines = rawData.split('\n').map(line => line.trim().split(/\s+/));
+            // 使用正則表達式分割：支援空格、逗號、分號、Tab
+            let lines = rawData.split('\n').map(line => {
+                return line.trim().split(/[\s,;]+/).filter(part => part.length > 0);
+            }).filter(parts => parts.length >= 2);
+
+            if (lines.length === 0) {
+                alert("⚠️ 無法解析座標，請檢查格式是否為：緯度, 經度");
+                return;
+            }
+
             if (document.getElementById('reverseOrder').checked) lines.reverse();
 
             const format = document.querySelector('input[name="format"]:checked').value;
@@ -114,14 +119,12 @@
             if (format === 'wpt') {
                 gpxContent += `<gpx xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/1" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" version="1.1" creator="ARMate">\n`;
                 lines.forEach((p, i) => {
-                    if (p.length >= 2) {
-                        gpxContent += `\t<wpt lat="${p[0]}" lon="${p[1]}">\n\t\t<time>${now}</time>\n\t\t<name>PT-${(i+1).toString().padStart(2, '0')}</name>\n\t</wpt>\n`;
-                    }
+                    gpxContent += `\t<wpt lat="${p[0]}" lon="${p[1]}">\n\t\t<time>${now}</time>\n\t\t<name>PT-${(i+1).toString().padStart(2, '0')}</name>\n\t</wpt>\n`;
                 });
             } else {
                 gpxContent += `<gpx version="1.1" creator="Gemini_GPX_Tool" xmlns="http://www.topografix.com/GPX/1/1">\n\t<trk>\n\t\t<name>Track_Export</name>\n\t\t<trkseg>\n`;
                 lines.forEach(p => {
-                    if (p.length >= 2) gpxContent += `\t\t\t<trkpt lat="${p[0]}" lon="${p[1]}"></trkpt>\n`;
+                    gpxContent += `\t\t\t<trkpt lat="${p[0]}" lon="${p[1]}"></trkpt>\n`;
                 });
                 gpxContent += `\t\t</trkseg>\n\t</trk>\n`;
             }
