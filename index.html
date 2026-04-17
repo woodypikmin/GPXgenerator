@@ -11,6 +11,8 @@
         body { background-color: #f8fafc; }
         .gradient-bg { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); }
         #dropZone.dragover { border-color: #6366f1; background-color: #eef2ff; }
+        #reverseOrder:checked ~ .dot { transform: translateX(100%); }
+        #reverseOrder:checked ~ div { background-color: #6366f1; }
     </style>
 </head>
 <body class="min-h-screen pb-12">
@@ -21,7 +23,7 @@
                 <h1 class="text-3xl font-bold flex items-center gap-3">
                     <i class="fas fa-sync-alt"></i> GPX Studio Pro
                 </h1>
-                <p class="mt-2 opacity-80 text-sm">支援 ZIP, GPX, JSON 檔案拖放與格式互轉</p>
+                <p class="mt-2 opacity-80 text-sm">支援 ZIP, GPX, JSON 檔案拖放與異常座標自動修正</p>
             </div>
         </div>
     </div>
@@ -40,9 +42,9 @@
                     <textarea id="inputData" 
                         class="w-full h-96 p-4 border border-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-xs bg-gray-50"
                         placeholder="在此貼上座標、JSON 內容，或是將檔案拖放到這裡..."></textarea>
-                    <input type="file" id="fileInput" class="hidden" accept=".zip,.gpx,.json,.txt">
-                    <button onclick="document.getElementById('fileInput').click()" class="mt-2 text-xs text-indigo-600 hover:underline">
-                        <i class="fas fa-upload"></i> 改用上傳檔案
+                    <input type="file" id="fileInput" class="hidden" accept=".zip,.gpx,.json,.txt" multiple>
+                    <button onclick="document.getElementById('fileInput').click()" class="mt-2 text-xs text-indigo-600 hover:underline font-bold">
+                        <i class="fas fa-upload"></i> 改用上傳檔案 (支援 ZIP 深度掃描)
                     </button>
                 </div>
             </div>
@@ -57,35 +59,41 @@
                         <label class="flex items-center cursor-pointer group">
                             <div class="relative">
                                 <input type="checkbox" id="reverseOrder" class="sr-only">
-                                <div class="block bg-gray-200 w-10 h-6 rounded-full transition-colors peer-checked:bg-indigo-600"></div>
+                                <div class="block bg-gray-200 w-10 h-6 rounded-full transition-colors"></div>
                                 <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform"></div>
                             </div>
-                            <span class="ml-3 text-sm text-gray-600">🔄 順序反轉</span>
+                            <span class="ml-3 text-sm text-gray-600">🔄 順序反轉 (倒序)</span>
                         </label>
 
                         <hr class="border-gray-100">
 
                         <div class="space-y-3">
-                            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">輸出格式目標</p>
+                            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider font-mono text-[10px]">自動校正系統：已開啟 (經度修正)</p>
+                            
+                            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mt-4">輸出格式目標</p>
                             <label class="flex items-center p-3 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 has-[:checked]:border-indigo-500">
                                 <input type="radio" name="format" value="trk" checked class="text-indigo-600">
                                 <div class="ml-3">
-                                    <span class="block text-sm font-bold text-gray-700 font-mono">trk (軌跡)</span>
+                                    <span class="block text-sm font-bold text-gray-700 font-mono">trk (標準軌跡)</span>
                                 </div>
                             </label>
                             <label class="flex items-center p-3 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 has-[:checked]:border-indigo-500">
                                 <input type="radio" name="format" value="wpt" class="text-indigo-600">
                                 <div class="ml-3">
-                                    <span class="block text-sm font-bold text-gray-700 font-mono">wpt (飛妹)</span>
+                                    <span class="block text-sm font-bold text-gray-700 font-mono">wpt (飛妹專用)</span>
                                 </div>
                             </label>
                         </div>
                     </div>
 
                     <button onclick="processAndDownload()" 
-                        class="w-full mt-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2">
-                        <i class="fas fa-magic"></i> 開始轉換並下載
+                        class="w-full mt-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                        <i class="fas fa-magic"></i> 立即轉換並下載
                     </button>
+                </div>
+                
+                <div class="bg-indigo-50 p-4 rounded-xl text-[10px] text-indigo-700 leading-relaxed shadow-sm border border-indigo-100 italic">
+                    <i class="fas fa-shield-alt"></i> 已內建經度溢位校正：自動將超出 -180 到 180 範圍的經度（如 -235）轉換為正確位置。
                 </div>
             </div>
         </div>
@@ -95,7 +103,6 @@
         const inputArea = document.getElementById('inputData');
         const dropZone = document.getElementById('dropZone');
 
-        // 處理拖放檔案
         dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
         dropZone.ondragleave = () => dropZone.classList.remove('dragover');
         dropZone.ondrop = (e) => {
@@ -107,91 +114,106 @@
         document.getElementById('fileInput').onchange = (e) => handleFiles(e.target.files);
 
         async function handleFiles(files) {
-            const file = files[0];
-            if (!file) return;
-
-            if (file.name.endsWith('.zip')) {
-                const zip = await JSZip.loadAsync(file);
-                for (let filename in zip.files) {
-                    if (filename.match(/\.(gpx|json|txt)$/i)) {
-                        inputArea.value = await zip.files[filename].async("string");
-                        break; // 抓到第一個就停止，可視需求改為合併
-                    }
+            let combinedContent = "";
+            for (let file of files) {
+                if (file.name.endsWith('.zip')) {
+                    try {
+                        const zip = await JSZip.loadAsync(file);
+                        const filePromises = [];
+                        zip.forEach((relativePath, zipEntry) => {
+                            if (!zipEntry.dir && relativePath.match(/\.(gpx|json|txt)$/i)) {
+                                filePromises.push(
+                                    zipEntry.async("string").then(content => { combinedContent += content + "\n"; })
+                                );
+                            }
+                        });
+                        await Promise.all(filePromises);
+                    } catch (e) { alert("ZIP 解壓失敗"); }
+                } else {
+                    combinedContent += await file.text() + "\n";
                 }
-            } else {
-                const text = await file.text();
-                inputArea.value = text;
             }
+            inputArea.value = combinedContent;
         }
 
         function extractCoords(text) {
-            let coords = [];
-            // 嘗試解析 JSON (巴西花田格式)
+            let allCoords = [];
+            // 1. JSON 模式
             try {
                 const data = JSON.parse(text);
-                const waypoints = data.routes?.[0]?.waypoints || data.waypoints || [];
-                if (waypoints.length > 0) {
-                    return waypoints.map(w => [w.lat, w.lng]);
-                }
-            } catch (e) { /* 不是 JSON */ }
+                const ways = data.routes?.[0]?.waypoints || data.waypoints || (Array.isArray(data) ? data : []);
+                ways.forEach(w => {
+                    let la = w.lat || w.latitude || w[0];
+                    let ln = w.lng || w.longitude || w[1];
+                    if (!isNaN(parseFloat(la))) allCoords.push([la, ln]);
+                });
+            } catch (e) {}
 
-            // 嘗試解析 GPX (從 XML 中提取 lat/lon)
+            if (allCoords.length > 0) return finalizeCoords(allCoords);
+
+            // 2. XML/GPX 模式
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(text, "text/xml");
             const pts = xmlDoc.querySelectorAll("trkpt, wpt");
             if (pts.length > 0) {
-                pts.forEach(p => coords.push([p.getAttribute("lat"), p.getAttribute("lon")]));
-                return coords;
+                pts.forEach(p => allCoords.push([p.getAttribute("lat"), p.getAttribute("lon")]));
+                return finalizeCoords(allCoords);
             }
 
-            // 嘗試解析一般文字座標 (原本的正則解析)
-            const lines = text.split('\n').map(line => {
-                return line.trim().split(/[\s,;]+/).filter(part => !isNaN(parseFloat(part)));
-            }).filter(parts => parts.length >= 2);
-            
-            return lines.map(p => [p[0], p[1]]);
+            // 3. Regex 強力模式 (針對不規則文字)
+            const regex = /(-?\d+\.\d+)\s*[,: \t]\s*(-?\d+\.\d+)/g;
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                allCoords.push([match[1], match[2]]);
+            }
+            return finalizeCoords(allCoords);
+        }
+
+        function finalizeCoords(coords) {
+            return coords.map(c => {
+                let lat = parseFloat(c[0]);
+                let lng = parseFloat(c[1]);
+                // 經度自動校正公式
+                lng = ((lng + 180) % 360 + 360) % 360 - 180;
+                return [lat, lng];
+            }).filter(c => !isNaN(c[0]) && !isNaN(c[1]));
         }
 
         function processAndDownload() {
             const rawData = inputArea.value.trim();
-            if (!rawData) return alert("⚠️ 請輸入數據或拖入檔案！");
+            if (!rawData) return alert("⚠️ 請先輸入數據或拖入檔案！");
 
             let coords = extractCoords(rawData);
-            if (coords.length === 0) return alert("⚠️ 無法讀取到任何座標！");
+            if (coords.length === 0) return alert("⚠️ 無法讀取到任何座標資料！");
 
             if (document.getElementById('reverseOrder').checked) coords.reverse();
 
             const format = document.querySelector('input[name="format"]:checked').value;
             const now = new Date().toISOString();
-            let gpxContent = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+            let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
             
             if (format === 'wpt') {
-                gpxContent += `<gpx xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="ARMate">\n`;
+                gpx += `<gpx xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="ARMate">\n`;
                 coords.forEach((p, i) => {
-                    gpxContent += `\t<wpt lat="${p[0]}" lon="${p[1]}">\n\t\t<time>${now}</time>\n\t\t<name>PT-${(i+1).toString().padStart(2, '0')}</name>\n\t</wpt>\n`;
+                    gpx += `\t<wpt lat="${p[0]}" lon="${p[1]}">\n\t\t<time>${now}</time>\n\t\t<name>PT-${(i+1).toString().padStart(2, '0')}</name>\n\t</wpt>\n`;
                 });
             } else {
-                gpxContent += `<gpx version="1.1" creator="GPX_Studio_Pro" xmlns="http://www.topografix.com/GPX/1/1">\n\t<trk>\n\t\t<name>Converted_Track</name>\n\t\t<trkseg>\n`;
+                gpx += `<gpx version="1.1" creator="GPX_Studio_Pro" xmlns="http://www.topografix.com/GPX/1/1">\n\t<trk>\n\t\t<name>Converted_Track</name>\n\t\t<trkseg>\n`;
                 coords.forEach(p => {
-                    gpxContent += `\t\t\t<trkpt lat="${p[0]}" lon="${p[1]}"></trkpt>\n`;
+                    gpx += `\t\t\t<trkpt lat="${p[0]}" lon="${p[1]}"></trkpt>\n`;
                 });
-                gpxContent += `\t\t</trkseg>\n\t</trk>\n`;
+                gpx += `\t\t</trkseg>\n\t</trk>\n`;
             }
-            gpxContent += `</gpx>`;
+            gpx += `</gpx>`;
 
-            const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
+            const blob = new Blob([gpx], { type: 'application/gpx+xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Converted_${new Date().getTime()}.gpx`;
+            a.download = `GPX_Pro_${new Date().getTime()}.gpx`;
             a.click();
             URL.revokeObjectURL(url);
         }
     </script>
-
-    <style>
-        #reverseOrder:checked ~ .dot { transform: translateX(100%); }
-        #reverseOrder:checked ~ div { background-color: #6366f1; }
-    </style>
 </body>
 </html>
