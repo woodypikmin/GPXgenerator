@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Studio - 萬用轉換器</title>
+    <title>GPX Studio - 智慧轉換器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -22,7 +22,7 @@
                 <h1 class="text-3xl font-bold flex items-center gap-3">
                     <i class="fas fa-sync-alt"></i> GPX Studio Pro
                 </h1>
-                <p class="mt-2 opacity-80 text-sm">支援座標手貼、檔案拖曳、GPX/JSON 互轉與資料夾批量合併</p>
+                <p class="mt-2 opacity-80 text-sm">支援座標手貼、資料夾拖曳、連續重複點自動剔除</p>
             </div>
         </div>
     </div>
@@ -34,7 +34,7 @@
                 <div id="dropZone" class="bg-white rounded-xl shadow-md p-6 border-2 border-dashed border-gray-200 transition-all relative">
                     <div class="flex items-center justify-between mb-4">
                         <label class="font-semibold text-gray-700 flex items-center gap-2">
-                            <i class="fas fa-edit text-indigo-500"></i> 輸入座標或拖曳資料夾/檔案到此
+                            <i class="fas fa-edit text-indigo-500"></i> 輸入數據 / 拖曳路徑資料夾
                         </label>
                         <div class="flex gap-2">
                             <input type="file" id="folderInput" class="hidden" webkitdirectory directory multiple>
@@ -46,9 +46,9 @@
                     
                     <textarea id="inputData" 
                         class="w-full h-96 p-4 border border-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-xs bg-gray-50 mb-2"
-                        placeholder="在此手貼座標 (例如 25.03, 121.56) 或是將資料夾直接拖進來..."></textarea>
+                        placeholder="在此貼上座標、JSON 或直接把 B0-Bn 資料夾拖進來..."></textarea>
                     
-                    <p id="fileStatus" class="text-[10px] text-indigo-500 font-bold italic">等待資料匯入...</p>
+                    <p id="fileStatus" class="text-[10px] text-indigo-500 font-bold italic">等待匯入資料...</p>
                 </div>
             </div>
 
@@ -72,19 +72,13 @@
 
                         <div class="space-y-3">
                             <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">輸出目標格式</p>
-                            
                             <label class="flex items-center p-3 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 has-[:checked]:border-indigo-500">
                                 <input type="radio" name="format" value="trk" checked class="text-indigo-600">
-                                <div class="ml-3">
-                                    <span class="block text-sm font-bold text-gray-700">🛰️ 標準軌跡版 (trk)</span>
-                                </div>
+                                <div class="ml-3"><span class="block text-sm font-bold text-gray-700">🛰️ 標準軌跡 (trk)</span></div>
                             </label>
-
                             <label class="flex items-center p-3 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 has-[:checked]:border-indigo-500">
                                 <input type="radio" name="format" value="wpt" class="text-indigo-600">
-                                <div class="ml-3">
-                                    <span class="block text-sm font-bold text-gray-700">🚩 飛妹專用版 (wpt)</span>
-                                </div>
+                                <div class="ml-3"><span class="block text-sm font-bold text-gray-700">🚩 航點模式 (wpt)</span></div>
                             </label>
                         </div>
                     </div>
@@ -96,12 +90,10 @@
                 </div>
 
                 <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-sm">
-                    <h4 class="text-xs font-bold text-indigo-700 mb-2">💡 提示：</h4>
-                    <ul class="text-[10px] text-indigo-600 space-y-1 leading-relaxed">
-                        <li>• <b>直接拖曳</b>：可以把整個資料夾丟進來。</li>
-                        <li>• <b>手 Key 支援</b>：空格、逗號、Tab 分隔皆可。</li>
-                        <li>• <b>自動補正</b>：會處理 B0-Bn 排序並修正異常經度。</li>
-                    </ul>
+                    <h4 class="text-xs font-bold text-indigo-700 mb-2">✨ 智慧去重邏輯：</h4>
+                    <p class="text-[10px] text-indigo-600 leading-relaxed">
+                        已優化去重演算法。現在程式僅會刪除<b>「連續出現且座標完全相同」</b>的點（例如：1-2-2-3-3-4 會自動轉為 1-2-3-4）。若路徑折返回到原點（如 1-2-3-1），重複的點將會被保留。
+                    </p>
                 </div>
             </div>
         </div>
@@ -110,93 +102,64 @@
     <script>
         const inputArea = document.getElementById('inputData');
         const dropZone = document.getElementById('dropZone');
-        const folderInput = document.getElementById('folderInput');
         const statusText = document.getElementById('fileStatus');
 
-        // --- 拖曳功能實作 ---
-        ['dragenter', 'dragover'].forEach(name => {
-            dropZone.addEventListener(name, (e) => {
-                e.preventDefault();
-                dropZone.classList.add('drop-active');
-            });
-        });
-
-        ['dragleave', 'drop'].forEach(name => {
-            dropZone.addEventListener(name, (e) => {
-                e.preventDefault();
-                dropZone.classList.remove('drop-active');
-            });
-        });
+        // --- 拖曳功能 ---
+        ['dragenter', 'dragover'].forEach(n => dropZone.addEventListener(n, (e) => {
+            e.preventDefault(); dropZone.classList.add('drop-active');
+        }));
+        ['dragleave', 'drop'].forEach(n => dropZone.addEventListener(n, (e) => {
+            e.preventDefault(); dropZone.classList.remove('drop-active');
+        }));
 
         dropZone.addEventListener('drop', async (e) => {
             const items = e.dataTransfer.items;
             let files = [];
-            
-            // 處理拖曳進來的檔案或資料夾
             for (let i = 0; i < items.length; i++) {
-                const item = items[i].webkitGetAsEntry();
-                if (item) {
-                    await scanFiles(item, files);
-                }
+                const entry = items[i].webkitGetAsEntry();
+                if (entry) await scanFiles(entry, files);
             }
             handleReadFiles(files);
         });
 
-        folderInput.addEventListener('change', (e) => {
-            handleReadFiles(Array.from(e.target.files));
-        });
+        document.getElementById('folderInput').addEventListener('change', (e) => handleReadFiles(Array.from(e.target.files)));
 
-        // 遞迴掃描資料夾內檔案
         async function scanFiles(entry, fileList) {
             if (entry.isFile) {
-                const file = await new Promise(res => entry.file(res));
-                fileList.push(file);
+                fileList.push(await new Promise(res => entry.file(res)));
             } else if (entry.isDirectory) {
                 const reader = entry.createReader();
                 const entries = await new Promise(res => reader.readEntries(res));
-                for (const child of entries) {
-                    await scanFiles(child, fileList);
-                }
+                for (const child of entries) await scanFiles(child, fileList);
             }
         }
 
         async function handleReadFiles(files) {
-            if (files.length === 0) return;
-
-            // 針對 B0, B1... 排序邏輯
             const bFiles = files.filter(f => f.name.match(/^B\d+$/i));
-            const otherFiles = files.filter(f => f.name.toLowerCase() === 'path' || f.name.match(/\.(gpx|json|txt)$/i));
+            bFiles.sort((a, b) => parseInt(a.name.substring(1)) - parseInt(b.name.substring(1)));
+            
+            const other = files.filter(f => f.name.toLowerCase() === 'path' || f.name.match(/\.(gpx|json|txt)$/i));
 
-            bFiles.sort((a, b) => {
-                const numA = parseInt(a.name.replace(/\D/g, ''));
-                const numB = parseInt(b.name.replace(/\D/g, ''));
-                return numA - numB;
-            });
-
-            let combinedContent = "";
-            for (let file of bFiles) combinedContent += await file.text() + "\n";
-            for (let file of otherFiles) combinedContent += await file.text() + "\n";
-
-            inputArea.value = combinedContent;
-            statusText.innerText = `✅ 已讀取 ${bFiles.length} 個路徑段數據`;
+            let content = "";
+            for (let f of bFiles) content += await f.text() + "\n";
+            for (let f of other) content += await f.text() + "\n";
+            inputArea.value = content;
+            statusText.innerText = `✅ 已載入 ${bFiles.length} 個 B 檔案及其他數據`;
         }
 
         // --- 核心解析邏輯 ---
         function extractCoords(text) {
             let pts = [];
-
-            // 1. JSON 解析
+            // 嘗試 JSON 
             try {
                 const data = JSON.parse(text);
                 const list = data.routes?.[0]?.waypoints || data.waypoints || (Array.isArray(data) ? data : []);
                 list.forEach(w => {
                     let la = w.lat || w.latitude || w.beginPointlat || (Array.isArray(w) ? w[0] : null);
                     let ln = w.lng || w.longitude || w.beginPointlng || (Array.isArray(w) ? w[1] : null);
-                    
                     if (typeof la === 'string' && la.includes('{')) {
                         const inner = JSON.parse(la);
-                        pts.push([inner.beginPointlat, inner.beginPointlng]);
-                        pts.push([inner.endPointlat, inner.endPointlng]);
+                        pts.push([inner.beginPointlat, inner.beginPointlng], [inner.endPointlat, inner.endPointlng]);
                     } else if (la !== null && !isNaN(parseFloat(la))) {
                         pts.push([la, ln]);
                     }
@@ -205,84 +168,68 @@
 
             if (pts.length > 0) return finalizeCoords(pts);
 
-            // 2. GPX XML 解析
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(text, "text/xml");
-            const xmlPts = xmlDoc.querySelectorAll("trkpt, wpt");
+            // 嘗試 XML
+            const xml = new DOMParser().parseFromString(text, "text/xml");
+            const xmlPts = xml.querySelectorAll("trkpt, wpt");
             if (xmlPts.length > 0) {
                 xmlPts.forEach(p => pts.push([p.getAttribute("lat"), p.getAttribute("lon")]));
                 return finalizeCoords(pts);
             }
 
-            // 3. 通用正規表達式 (修正手 Key 問題：不再限定數字大小)
-            // 尋找包含小數點的數字對
+            // 強力 Regex (手 Key 座標)
             const regex = /(-?\d+\.\d+)\s*[,: \t]\s*(-?\d+\.\d+)/g;
-            let match;
-            while ((match = regex.exec(text)) !== null) {
-                let v1 = parseFloat(match[1]);
-                let v2 = parseFloat(match[2]);
-                
-                // 過濾明顯不是經緯度的數據 (例如時速 7.76)
-                // 判斷邏輯：一組座標至少要有一個是大於 10 或小於 -10 的數值（針對手 Key 優化）
-                // 同時緯度必須在 -90 ~ 90 之間
-                if (Math.abs(v1) <= 90) {
-                    pts.push([v1, v2]);
-                } else {
-                    pts.push([v2, v1]); // 如果順序反了自動交換
-                }
+            let m;
+            while ((m = regex.exec(text)) !== null) {
+                let v1 = parseFloat(m[1]), v2 = parseFloat(m[2]);
+                if (Math.abs(v1) <= 90) pts.push([v1, v2]); else pts.push([v2, v1]);
             }
-            
             return finalizeCoords(pts);
         }
 
         function finalizeCoords(coords) {
-            return coords.map(c => {
-                let lat = parseFloat(c[0]);
-                let lng = parseFloat(c[1]);
-                // 經度溢位補正 (處理 -235 等情況)
+            let filtered = [];
+            for (let i = 0; i < coords.length; i++) {
+                let lat = parseFloat(coords[i][0]);
+                let lng = parseFloat(coords[i][1]);
+                
+                // 經度校正
                 lng = ((lng + 180) % 360 + 360) % 360 - 180;
-                return [lat, lng];
-            }).filter((c, index, self) => {
-                if (isNaN(c[0]) || isNaN(c[1])) return false;
-                if (index === 0) return true;
-                // 移除重複點
-                return Math.abs(c[0] - self[index-1][0]) > 0.0000001 || Math.abs(c[1] - self[index-1][1]) > 0.0000001;
-            });
+
+                // 檢查是否連續重複 (12233441 -> 12341)
+                if (filtered.length > 0) {
+                    const prev = filtered[filtered.length - 1];
+                    // 如果這點跟前一點座標幾乎一模一樣，就跳過不加
+                    if (Math.abs(lat - prev[0]) < 0.0000001 && Math.abs(lng - prev[1]) < 0.0000001) {
+                        continue;
+                    }
+                }
+                filtered.push([lat, lng]);
+            }
+            return filtered;
         }
 
         function processAndDownload() {
-            const rawData = inputArea.value.trim();
-            if (!rawData) return alert("請貼入數據或拖曳檔案！");
-
-            let coords = extractCoords(rawData);
-            if (coords.length === 0) return alert("無法識別座標內容！請確認格式。");
-
+            const raw = inputArea.value.trim();
+            if (!raw) return alert("請輸入數據！");
+            let coords = extractCoords(raw);
+            if (coords.length === 0) return alert("無法識別座標！");
             if (document.getElementById('reverseOrder').checked) coords.reverse();
 
             const format = document.querySelector('input[name="format"]:checked').value;
-            const now = new Date().toISOString();
             let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">\n`;
-            
             if (format === 'wpt') {
-                coords.forEach((p, i) => {
-                    gpx += `\t<wpt lat="${p[0]}" lon="${p[1]}"><name>PT-${(i+1).toString().padStart(3, '0')}</name></wpt>\n`;
-                });
+                coords.forEach((p, i) => gpx += `\t<wpt lat="${p[0]}" lon="${p[1]}"><name>PT-${(i+1).toString().padStart(3,'0')}</name></wpt>\n`);
             } else {
-                gpx += `\t<trk>\n\t\t<name>Exported_Track</name>\n\t\t<trkseg>\n`;
-                coords.forEach(p => {
-                    gpx += `\t\t\t<trkpt lat="${p[0]}" lon="${p[1]}"></trkpt>\n`;
-                });
-                gpx += `\t\t</trkseg>\n\t</trk>\n`;
+                gpx += `\t<trk><name>Export</name><trkseg>\n`;
+                coords.forEach(p => gpx += `\t\t<trkpt lat="${p[0]}" lon="${p[1]}"></trkpt>\n`);
+                gpx += `\t</trkseg></trk>\n`;
             }
             gpx += `</gpx>`;
 
             const blob = new Blob([gpx], { type: 'application/gpx+xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `GPX_Export_${new Date().getTime()}.gpx`;
-            a.click();
-            URL.revokeObjectURL(url);
+            a.href = url; a.download = `Export_${new Date().getTime()}.gpx`; a.click();
         }
     </script>
 </body>
