@@ -22,7 +22,7 @@
                 <h1 class="text-3xl font-bold flex items-center gap-3">
                     <i class="fas fa-sync-alt"></i> GPX Studio Pro
                 </h1>
-                <p class="mt-2 opacity-80 text-sm">支援純座標、GPX、JSON 互轉及資料夾批量合併</p>
+                <p class="mt-2 opacity-80 text-sm">支援純座標、GPX、JSON 互轉及首爾格式資料夾合併</p>
             </div>
         </div>
     </div>
@@ -39,16 +39,16 @@
                         <div class="flex gap-2">
                             <input type="file" id="folderInput" class="hidden" webkitdirectory directory multiple>
                             <button onclick="document.getElementById('folderInput').click()" class="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 transition-colors font-bold">
-                                <i class="fas fa-folder-open"></i> 讀取路線資料夾
+                                <i class="fas fa-folder-open"></i> 讀取首爾格式資料夾 (B0-Bn)
                             </button>
                         </div>
                     </div>
                     
                     <textarea id="inputData" 
                         class="w-full h-96 p-4 border border-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-xs bg-gray-50 mb-2"
-                        placeholder="在此貼上任何格式：&#10;1. 純座標 (37.5, 126.9)&#10;2. GPX 代碼 (trkpt 或 wpt)&#10;3. JSON 內容 (巴西花田或首爾路徑)&#10;4. 或是直接使用上方按鈕讀取資料夾..."></textarea>
+                        placeholder="選取資料夾或在此貼上座標..."></textarea>
                     
-                    <p class="text-[10px] text-gray-400 italic text-right">* 程式會自動過濾非座標文字並校正經度 (修正 -235 等錯誤)</p>
+                    <p class="text-[10px] text-gray-400 italic text-right">* 智慧解析已啟動：自動過濾雜訊數字並移除重複點</p>
                 </div>
             </div>
 
@@ -72,21 +72,13 @@
 
                         <div class="space-y-3">
                             <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">輸出目標格式</p>
-                            
                             <label class="flex items-center p-3 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
                                 <input type="radio" name="format" value="trk" checked class="text-indigo-600">
-                                <div class="ml-3">
-                                    <span class="block text-sm font-bold text-gray-700">🛰️ 標準軌跡版 (trk)</span>
-                                    <span class="block text-[10px] text-gray-400 font-mono">通用軌跡連線格式</span>
-                                </div>
+                                <div class="ml-3"><span class="block text-sm font-bold text-gray-700">🛰️ 標準軌跡版 (trk)</span></div>
                             </label>
-
                             <label class="flex items-center p-3 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
                                 <input type="radio" name="format" value="wpt" class="text-indigo-600">
-                                <div class="ml-3">
-                                    <span class="block text-sm font-bold text-gray-700">🚩 飛妹專用版 (wpt)</span>
-                                    <span class="block text-[10px] text-gray-400 font-mono">獨立航點座標格式</span>
-                                </div>
+                                <div class="ml-3"><span class="block text-sm font-bold text-gray-700">🚩 飛妹專用版 (wpt)</span></div>
                             </label>
                         </div>
                     </div>
@@ -96,16 +88,6 @@
                         <i class="fas fa-magic"></i> 開始轉換並下載
                     </button>
                 </div>
-
-                <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-sm">
-                    <h4 class="text-xs font-bold text-indigo-700 mb-2">功能簡介</h4>
-                    <ul class="text-[10px] text-indigo-600 space-y-1 leading-relaxed">
-                        <li>• <b class="underline">萬用轉換</b>：自動辨識貼上的 GPX/JSON。</li>
-                        <li>• <b class="underline">批量讀取</b>：選取資料夾後自動按 B0, B1... 排序。</li>
-                        <li>• <b class="underline">自動修正</b>：經度若超過 180 (如 -235) 會自動補正。</li>
-                        <li>• <b class="underline">飛妹互轉</b>：將 wpt 貼入選 trk 導出即可完成互轉。</li>
-                    </ul>
-                </div>
             </div>
         </div>
     </main>
@@ -114,127 +96,129 @@
         const inputArea = document.getElementById('inputData');
         const folderInput = document.getElementById('folderInput');
 
-        // 資料夾讀取邏輯
         folderInput.addEventListener('change', async (e) => {
             const files = Array.from(e.target.files);
             if (files.length === 0) return;
 
-            // 分類與排序 B 檔案
+            // 核心邏輯：只抓 B 開頭且檔名是純數字的檔案，忽略 path
             const bFiles = files.filter(f => f.name.match(/^B\d+$/i));
-            const otherFiles = files.filter(f => f.name.toLowerCase() === 'path' || f.name.match(/\.(gpx|json|txt)$/i));
 
             bFiles.sort((a, b) => {
-                const numA = parseInt(a.name.replace(/\D/g, ''));
-                const numB = parseInt(b.name.replace(/\D/g, ''));
+                const numA = parseInt(a.name.substring(1));
+                const numB = parseInt(b.name.substring(1));
                 return numA - numB;
             });
 
             let combinedContent = "";
-            for (let file of bFiles) { combinedContent += await file.text() + "\n"; }
-            for (let file of otherFiles) { combinedContent += await file.text() + "\n"; }
+            for (let file of bFiles) {
+                combinedContent += await file.text() + "\n";
+            }
+
+            // 如果沒抓到 B 檔案，才去讀取 path
+            if (bFiles.length === 0) {
+                const pathFile = files.find(f => f.name.toLowerCase() === 'path');
+                if (pathFile) combinedContent = await pathFile.text();
+            }
 
             inputArea.value = combinedContent;
-            alert(`已成功讀取並串接 ${bFiles.length} 個 B 檔案與其他相關數據`);
+            alert(`讀取完成：串接了 ${bFiles.length} 個 B 檔案的細節路徑`);
         });
 
         function extractCoords(text) {
-            let allCoords = [];
+            let pts = [];
 
-            // 1. JSON 深度解析 (針對 Brazil 花田或 Seoul Path 格式)
+            // 1. 先判斷是否為首爾 JSON 格式或 B 檔案陣列格式
             try {
                 const data = JSON.parse(text);
-                const ways = data.routes?.[0]?.waypoints || data.waypoints || (Array.isArray(data) ? data : []);
-                ways.forEach(w => {
-                    // 支援 {lat, lng} 或 [lat, lng] 或首爾那種轉義 JSON
-                    let la = w.lat || w.latitude || w.beginPointlat || w[0];
-                    let ln = w.lng || w.longitude || w.beginPointlng || w[1];
-                    if (typeof la === 'string' && la.includes('{')) {
-                        // 處理首爾那種字串化的內層 JSON
-                        const inner = JSON.parse(la);
-                        allCoords.push([inner.beginPointlat, inner.beginPointlng]);
-                        allCoords.push([inner.endPointlat, inner.endPointlng]);
-                    } else if (!isNaN(parseFloat(la))) {
-                        allCoords.push([la, ln]);
-                    }
-                });
-            } catch (e) {}
+                if (Array.isArray(data)) {
+                    data.forEach(item => {
+                        // 如果是 B 檔案內部的格式: [lat, lng, lat, lng...]
+                        if (typeof item === 'number' && data.length >= 2) {
+                            // 這邊直接處理整串數字陣列，跳出迴圈
+                            for(let i=0; i < data.length; i+=2) {
+                                if (data[i+1]) pts.push([data[i], data[i+1]]);
+                            }
+                            throw 'done'; 
+                        }
+                        // 如果是 path 檔案內部的字串化內層 JSON
+                        try {
+                            const inner = typeof item === 'string' ? JSON.parse(item) : item;
+                            if (inner.beginPointlat) pts.push([inner.beginPointlat, inner.beginPointlng]);
+                            if (inner.endPointlat) pts.push([inner.endPointlat, inner.endPointlng]);
+                        } catch(e) {}
+                    });
+                }
+            } catch (e) { if(e !== 'done') {} }
 
-            if (allCoords.length > 0) return finalizeCoords(allCoords);
+            if (pts.length > 0) return finalizeCoords(pts);
 
-            // 2. GPX XML 解析 (正常轉飛妹、飛妹轉正常的核心)
+            // 2. 判斷是否為 GPX XML
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(text, "text/xml");
-            const pts = xmlDoc.querySelectorAll("trkpt, wpt");
-            if (pts.length > 0) {
-                pts.forEach(p => allCoords.push([p.getAttribute("lat"), p.getAttribute("lon")]));
-                return finalizeCoords(allCoords);
+            const xmlPts = xmlDoc.querySelectorAll("trkpt, wpt");
+            if (xmlPts.length > 0) {
+                xmlPts.forEach(p => pts.push([p.getAttribute("lat"), p.getAttribute("lon")]));
+                return finalizeCoords(pts);
             }
 
-            // 3. 萬能 Regex 模式 (直接在亂文、B 檔案中硬挖數字)
+            // 3. 通用正規表達式 (修正：必須是合理的經緯度範圍)
             const regex = /(-?\d{1,3}\.\d{5,15})/g; 
             let matches = text.match(regex);
             if (matches && matches.length >= 2) {
                 for (let i = 0; i < matches.length; i += 2) {
                     let lat = parseFloat(matches[i]);
                     let lng = parseFloat(matches[i+1]);
-                    // 地理判定，防止經緯抓反
-                    if (Math.abs(lat) <= 90) allCoords.push([lat, lng]);
-                    else allCoords.push([lng, lat]);
+                    // 過濾掉像 7.76, 0.1 這種明顯不是座標的數據 (首爾緯度 37)
+                    if (Math.abs(lat) > 10 && Math.abs(lng) > 10) {
+                        if (Math.abs(lat) <= 90) pts.push([lat, lng]);
+                        else pts.push([lng, lat]);
+                    }
                 }
             }
             
-            return finalizeCoords(allCoords);
+            return finalizeCoords(pts);
         }
 
         function finalizeCoords(coords) {
             return coords.map(c => {
                 let lat = parseFloat(c[0]);
                 let lng = parseFloat(c[1]);
-                // 核心經度補正邏輯
                 lng = ((lng + 180) % 360 + 360) % 360 - 180;
                 return [lat, lng];
             }).filter((c, index, self) => {
                 if (isNaN(c[0]) || isNaN(c[1])) return false;
                 if (index === 0) return true;
-                // 移除重複點
-                return c[0] !== self[index-1][0] || c[1] !== self[index-1][1];
+                // 重複點過濾：只要跟前一點距離極近(或相同)就刪除
+                const dist = Math.abs(c[0] - self[index-1][0]) + Math.abs(c[1] - self[index-1][1]);
+                return dist > 0.0000001; 
             });
         }
 
         function processAndDownload() {
             const rawData = inputArea.value.trim();
-            if (!rawData) return alert("⚠️ 請輸入數據或讀取資料夾！");
-
+            if (!rawData) return alert("請先輸入數據！");
             let coords = extractCoords(rawData);
-            if (coords.length === 0) return alert("⚠️ 未能讀取到任何座標資料！");
-
+            if (coords.length === 0) return alert("找不到座標！");
             if (document.getElementById('reverseOrder').checked) coords.reverse();
 
             const format = document.querySelector('input[name="format"]:checked').value;
             const now = new Date().toISOString();
             let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-            
             if (format === 'wpt') {
-                gpx += `<gpx xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="ARMate">\n`;
+                gpx += `<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">\n`;
                 coords.forEach((p, i) => {
-                    gpx += `\t<wpt lat="${p[0]}" lon="${p[1]}">\n\t\t<time>${now}</time>\n\t\t<name>PT-${(i+1).toString().padStart(3, '0')}</name>\n\t</wpt>\n`;
+                    gpx += `\t<wpt lat="${p[0]}" lon="${p[1]}"><name>PT-${(i+1).toString().padStart(3, '0')}</name></wpt>\n`;
                 });
             } else {
-                gpx += `<gpx version="1.1" creator="GPX_Studio_Pro" xmlns="http://www.topografix.com/GPX/1/1">\n\t<trk>\n\t\t<name>Converted_Track</name>\n\t\t<trkseg>\n`;
-                coords.forEach(p => {
-                    gpx += `\t\t\t<trkpt lat="${p[0]}" lon="${p[1]}"></trkpt>\n`;
-                });
+                gpx += `<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">\n\t<trk>\n\t\t<name>Export</name>\n\t\t<trkseg>\n`;
+                coords.forEach(p => gpx += `\t\t\t<trkpt lat="${p[0]}" lon="${p[1]}"></trkpt>\n`);
                 gpx += `\t\t</trkseg>\n\t</trk>\n`;
             }
             gpx += `</gpx>`;
-
             const blob = new Blob([gpx], { type: 'application/gpx+xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `GPX_Export_${new Date().getTime()}.gpx`;
-            a.click();
-            URL.revokeObjectURL(url);
+            a.href = url; a.download = `GPX_FIXED_${new Date().getTime()}.gpx`; a.click();
         }
     </script>
 </body>
