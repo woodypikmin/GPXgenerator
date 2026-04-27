@@ -226,7 +226,8 @@
             }
             gpx += `</gpx>`;
 
-            const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+            // 👇 關鍵修改點：把 application/gpx+xml 換成 Android 看得懂的 application/xml;charset=utf-8
+            const blob = new Blob([gpx], { type: 'application/xml;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url; a.download = `Export_${new Date().getTime()}.gpx`; a.click();
