@@ -71,6 +71,13 @@
                         <hr class="border-gray-100">
 
                         <div class="space-y-3">
+                            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">自訂檔案名稱 (選填)</p>
+                            <input type="text" id="fileNameInput" class="w-full p-3 border border-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-gray-700 placeholder-gray-300" placeholder="例如：我的路線">
+                        </div>
+
+                        <hr class="border-gray-100">
+
+                        <div class="space-y-3">
                             <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">輸出目標格式</p>
                             
                             <label class="flex items-center p-3 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 has-[:checked]:border-indigo-500">
@@ -236,12 +243,17 @@
             }
             gpx += `</gpx>`;
 
+            // 處理自訂檔名邏輯
+            const customNameInput = document.getElementById('fileNameInput').value.trim();
+            const baseFileName = customNameInput ? customNameInput : `Export_${new Date().getTime()}`;
+            const finalFileName = `${baseFileName}(${format.toUpperCase()}).gpx`;
+
             const blob = new Blob([gpx], { type: 'application/gpx+xml;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = url;
-            a.download = `Export_${new Date().getTime()}.gpx`;
+            a.download = finalFileName;
             document.body.appendChild(a);
             a.click();
             setTimeout(() => {
