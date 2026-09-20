@@ -22,7 +22,7 @@
                 <h1 class="text-3xl font-bold flex items-center gap-3">
                     <i class="fas fa-sync-alt"></i> GPX Studio Pro
                 </h1>
-                <p class="mt-2 opacity-80 text-sm">支援座標轉換、資料夾拖曳、連續重複點自動剔除</p>
+                <p class="mt-2 opacity-80 text-sm">支援 GPX (wpt / trk / rte) 與純座標互相轉換、連續重複點自動剔除</p>
             </div>
         </div>
     </div>
@@ -34,19 +34,28 @@
                 <div id="dropZone" class="bg-white rounded-xl shadow-md p-6 border-2 border-dashed border-gray-200 transition-all relative">
                     <div class="flex items-center justify-between mb-4">
                         <label class="font-semibold text-gray-700 flex items-center gap-2">
-                            <i class="fas fa-edit text-indigo-500"></i> 輸入數據 / 拖曳資料夾
+                            <i class="fas fa-edit text-indigo-500"></i> 輸入數據 / 拖曳 GPX 或資料夾
                         </label>
                         <div class="flex gap-2">
                             <input type="file" id="folderInput" class="hidden" webkitdirectory directory multiple>
+                            <input type="file" id="fileInput" class="hidden" accept=".gpx,.txt,.json" multiple onchange="handleReadFiles(Array.from(this.files))">
+                            <button onclick="document.getElementById('fileInput').click()" class="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-all font-bold">
+                                <i class="fas fa-file-alt"></i> 選取檔案
+                            </button>
                             <button onclick="document.getElementById('folderInput').click()" class="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-all font-bold">
-                                <i class="fas fa-folder-open"></i> 手動選取資料夾
+                                <i class="fas fa-folder-open"></i> 選取資料夾
                             </button>
                         </div>
                     </div>
                     
                     <textarea id="inputData" 
                         class="w-full h-96 p-4 border border-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-xs bg-gray-50 mb-2"
-                        placeholder="可接受格式：&#10;21.53, 30.25&#10;21.53,30.25&#10;21.53 30.25&#10;或是直接將資料夾拖進來..."></textarea>
+                        placeholder="可接受格式：
+1. 完整 GPX 標籤 XML（wpt、trk、rte、lockito 等）
+2. 逗號或空格分隔純座標：
+   -8.1082864, -79.0325649
+   -8.109061,-79.032331
+3. 支援直接將 GPX 檔或資料夾拖曳至此處..."></textarea>
                     
                     <p id="fileStatus" class="text-[10px] text-indigo-500 font-bold italic">等待匯入資料...</p>
                 </div>
@@ -80,8 +89,17 @@
                         <div class="space-y-3">
                             <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">輸出目標格式</p>
                             
+                            <!-- 新增純座標選項 -->
+                            <label class="flex items-center p-3 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 has-[:checked]:border-indigo-500 bg-indigo-50/40">
+                                <input type="radio" name="format" value="txt" checked class="text-indigo-600">
+                                <div class="ml-3">
+                                    <span class="block text-sm font-bold text-indigo-700">📍 純座標文字 (lat, lon)</span>
+                                    <span class="block text-[10px] text-gray-400">剔除所有 XML 標籤，純粹經緯度清單</span>
+                                </div>
+                            </label>
+
                             <label class="flex items-center p-3 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 has-[:checked]:border-indigo-500">
-                                <input type="radio" name="format" value="trk" checked class="text-indigo-600">
+                                <input type="radio" name="format" value="trk" class="text-indigo-600">
                                 <div class="ml-3">
                                     <span class="block text-sm font-bold text-gray-700">🛰️ trk 格式</span>
                                     <span class="block text-[10px] text-gray-400">(藍色地圖跳點 / mocklocations 路徑)</span>
@@ -106,16 +124,22 @@
                         </div>
                     </div>
 
-                    <button onclick="processAndDownload()" 
-                        class="w-full mt-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
-                        <i class="fas fa-magic"></i> 轉換並下載 GPX
-                    </button>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-8">
+                        <button onclick="copyPureCoords()" 
+                            class="bg-slate-700 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl shadow transition-all flex items-center justify-center gap-2 text-sm">
+                            <i class="fas fa-copy"></i> 複製純座標
+                        </button>
+                        <button onclick="processAndDownload()" 
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm">
+                            <i class="fas fa-download"></i> 轉換並下載
+                        </button>
+                    </div>
                 </div>
 
                 <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-sm">
-                    <h4 class="text-xs font-bold text-indigo-700 mb-2">✨ 智慧去重邏輯：</h4>
+                    <h4 class="text-xs font-bold text-indigo-700 mb-2">✨ 智慧解析與去重：</h4>
                     <p class="text-[10px] text-indigo-600 leading-relaxed">
-                        已優化去重演算法。現在程式僅會刪除<b>「連續出現且座標完全相同」</b>的點（例如：1-2-2-3-3-4 會自動轉為 1-2-3-4）。若路徑折返回到原點（如 1-2-3-1），重複的點將會被保留。
+                        支援自動解析任意 GPX 結構（&lt;wpt&gt;、&lt;trkpt&gt;、&lt;rtept&gt; 以及 Lockito 擴充標籤）[cite: 1, 5, 8, 9]，可一鍵剝離所有 XML 節點回歸成純文字經緯度。
                     </p>
                 </div>
             </div>
@@ -165,11 +189,12 @@
             for (let f of bFiles) content += await f.text() + "\n";
             for (let f of other) content += await f.text() + "\n";
             inputArea.value = content;
-            statusText.innerText = `✅ 已成功讀取數據`;
+            statusText.innerText = `✅ 已成功讀取數據 (${files.length} 個檔案)`;
         }
 
         function extractCoords(text) {
             let pts = [];
+            // 1. JSON 格式解析
             try {
                 const data = JSON.parse(text);
                 const list = data.routes?.[0]?.waypoints || data.waypoints || (Array.isArray(data) ? data : []);
@@ -187,13 +212,21 @@
 
             if (pts.length > 0) return finalizeCoords(pts);
 
-            const xml = new DOMParser().parseFromString(text, "text/xml");
-            const xmlPts = xml.querySelectorAll("trkpt, wpt, rtept");
-            if (xmlPts.length > 0) {
-                xmlPts.forEach(p => pts.push([p.getAttribute("lat"), p.getAttribute("lon")]));
-                return finalizeCoords(pts);
-            }
+            // 2. XML / GPX 標籤解析 (支援 wpt, trkpt, rtept 等)
+            try {
+                const xml = new DOMParser().parseFromString(text, "text/xml");
+                const xmlPts = xml.querySelectorAll("trkpt, wpt, rtept");
+                if (xmlPts.length > 0) {
+                    xmlPts.forEach(p => {
+                        const lat = p.getAttribute("lat");
+                        const lon = p.getAttribute("lon");
+                        if (lat !== null && lon !== null) pts.push([lat, lon]);
+                    });
+                    if (pts.length > 0) return finalizeCoords(pts);
+                }
+            } catch (e) {}
 
+            // 3. 正則掃描 fallback：提取純數值對（緯度, 經度）
             const regex = /(-?\d+\.\d+)\s*[,: \t]\s*(-?\d+\.\d+)/g;
             let m;
             while ((m = regex.exec(text)) !== null) {
@@ -220,35 +253,73 @@
             return filtered;
         }
 
-        function processAndDownload() {
+        function getProcessedCoords() {
             const raw = inputArea.value.trim();
-            if (!raw) return alert("請輸入數據！");
+            if (!raw) {
+                alert("請輸入數據！");
+                return null;
+            }
             let coords = extractCoords(raw);
-            if (coords.length === 0) return alert("無法識別座標！");
-            if (document.getElementById('reverseOrder').checked) coords.reverse();
+            if (coords.length === 0) {
+                alert("無法識別座標！");
+                return null;
+            }
+            if (document.getElementById('reverseOrder').checked) {
+                coords.reverse();
+            }
+            return coords;
+        }
+
+        // 一鍵複製純座標功能
+        function copyPureCoords() {
+            const coords = getProcessedCoords();
+            if (!coords) return;
+            const pureText = coords.map(p => `${p[0]}, ${p[1]}`).join('\n');
+            navigator.clipboard.writeText(pureText).then(() => {
+                statusText.innerText = `📋 已複製 ${coords.length} 個純座標至剪貼簿！`;
+                alert(`已成功複製 ${coords.length} 筆純座標！`);
+            }).catch(() => {
+                inputArea.value = pureText;
+                alert("已將純座標轉換並放回輸入框，請直接全選複製。");
+            });
+        }
+
+        function processAndDownload() {
+            const coords = getProcessedCoords();
+            if (!coords) return;
 
             const format = document.querySelector('input[name="format"]:checked').value;
-            let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="GPX_Studio_Pro" xmlns="http://www.topografix.com/GPX/1/1">\n`;
-            
-            if (format === 'wpt') {
-                coords.forEach((p, i) => gpx += `\t<wpt lat="${p[0]}" lon="${p[1]}"><name>PT-${(i+1).toString().padStart(3,'0')}</name></wpt>\n`);
-            } else if (format === 'rte') {
-                gpx += `\t<rte><name>Route_Export</name>\n`;
-                coords.forEach(p => gpx += `\t\t<rtept lat="${p[0]}" lon="${p[1]}"></rtept>\n`);
-                gpx += `\t</rte>\n`;
-            } else {
-                gpx += `\t<trk><name>Track_Export</name><trkseg>\n`;
-                coords.forEach(p => gpx += `\t\t<trkpt lat="${p[0]}" lon="${p[1]}"></trkpt>\n`);
-                gpx += `\t</trkseg></trk>\n`;
-            }
-            gpx += `</gpx>`;
-
-            // 處理自訂檔名邏輯
             const customNameInput = document.getElementById('fileNameInput').value.trim();
             const baseFileName = customNameInput ? customNameInput : `Export_${new Date().getTime()}`;
-            const finalFileName = `${baseFileName}(${format.toUpperCase()}).gpx`;
+            
+            let outputContent = "";
+            let finalFileName = "";
+            let mimeType = "application/gpx+xml;charset=utf-8";
 
-            const blob = new Blob([gpx], { type: 'application/gpx+xml;charset=utf-8' });
+            if (format === 'txt') {
+                // 純座標格式輸出（每行 緯度, 經度）
+                outputContent = coords.map(p => `${p[0]}, ${p[1]}`).join('\n');
+                finalFileName = `${baseFileName}(Coords).txt`;
+                mimeType = "text/plain;charset=utf-8";
+            } else {
+                let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="GPX_Studio_Pro" xmlns="http://www.topografix.com/GPX/1/1">\n`;
+                if (format === 'wpt') {
+                    coords.forEach((p, i) => gpx += `\t<wpt lat="${p[0]}" lon="${p[1]}"><name>PT-${(i+1).toString().padStart(3,'0')}</name></wpt>\n`);
+                } else if (format === 'rte') {
+                    gpx += `\t<rte><name>Route_Export</name>\n`;
+                    coords.forEach(p => gpx += `\t\t<rtept lat="${p[0]}" lon="${p[1]}"></rtept>\n`);
+                    gpx += `\t</rte>\n`;
+                } else {
+                    gpx += `\t<trk><name>Track_Export</name><trkseg>\n`;
+                    coords.forEach(p => gpx += `\t\t<trkpt lat="${p[0]}" lon="${p[1]}"></trkpt>\n`);
+                    gpx += `\t</trkseg></trk>\n`;
+                }
+                gpx += `</gpx>`;
+                outputContent = gpx;
+                finalFileName = `${baseFileName}(${format.toUpperCase()}).gpx`;
+            }
+
+            const blob = new Blob([outputContent], { type: mimeType });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.style.display = 'none';
